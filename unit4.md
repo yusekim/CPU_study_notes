@@ -63,27 +63,285 @@ M: the currently selected memory register, M = RAM[A] -> 현재 선택된 메모
 (D, A 레지스터는 CPU안에 위치해있다.)
 
 Examples
-> //D=10
-@10
-D=A
+```
+//D=10
+	@10
+	D=A
+
 //D++
-D=D+1
+	D=D+1
+
 //D=RAM[17]
-@17
-D=M
+	@17
+	D=M
+
 //RAM[17]=10
-@10
-D=A
-@17
-M=D
+	@10
+	D=A
+	@17
+	M=D
+
 //RAM[5]=RAM[3]
-@3
-D=M
-@5
-M=D
+	@3
+	D=M
+	@5
+	M=D
+```
 
 **Built-in symbols**
 R(number) will be translated to (number)
 >@R5 is same to @5
 SCREEN -> 16384
 KBD -> 24576
+
+### Unit 4.7
+
+- **Branching**
+```// Program: Signum.asm
+// Computes: if R0>0
+//		R1=1
+//	     else
+//		R1=0
+
+	@R0
+	D=M
+
+	@POSITIVE // using a label
+	D;JGT
+
+	@R1
+	M=0
+	@END
+	0;JMP
+
+(POSITIVE)
+	@R1
+	M=1
+
+(END)
+	@END
+	0;JMP
+```
+- **Variables**
+```
+// Program: Flip.asm
+// flips the values of
+// RAM[0] and RAM[1]
+// temp = R1
+// R1 = R0
+// R0 = temp
+
+	@R1
+	D=M
+	@temp
+	M=D		//temp = R1
+
+	@R0
+	D=M
+	@R1
+	M=D		//R1 = R0
+
+	@temp
+	D=M
+	@R0
+	M=D		//R0 = temp
+
+	(END)
+	@END
+	0;JMP
+```
+**@temp**: "find some available memory register (say register n), and use it to represent the variable temp. So, from now on, each occurance of @temp in the program will be translated to @n
+
+- **Iteration**
+For example, to compute 1 + 2 + ... + n
+
+```
+"Pseudo code"
+// Computes RAM[1] = 1+2+...+RAM[0]<br>
+	n = R0
+	i = 1
+	sum = 0
+LOOP:
+	if i > n goto STOP
+	sum = sum + i
+	i = i + 1
+	goto LOOP
+STOP:
+	R1 = sum
+```
+```
+"Hack assembly code"
+// Program: Sum1toN.asm
+// Computes RAM[1] = 1+2+...+n
+// Usage: Put a number (n) in RAM[0]
+
+	@R0
+	D=M
+	@n
+	M=D	// n = R0
+	@i
+	M=1	// i = 1
+	@sum
+	M=0	// sum = 0
+
+(LOOP)
+	@i
+	D=M
+	@n
+	D=D - M
+	@STOP
+	D;JGT	// if i > n goto STOP
+
+	@sum
+	D=M
+	@i
+	D=D+M
+	@sum
+	M=D	// sum = sum + i
+	@i
+	M=M+1	// i = i + 1
+	@LOOP
+	0;JMP
+
+(STOP)
+	@sum
+	D=M
+	@R1
+	M=D	// RAM[1] = sum
+
+(END)
+	@END
+	0;JMP
+```
+
+### Unit 4.8
+
+- **Pointers**
+```
+Example:
+// for (i=0; i<n; i++){
+//	arr[i] = -1;
+//	}
+	// Suppose that arr=100 and n=10
+
+	// arr = 100
+	@100
+	D=A
+	@arr
+	M=D
+
+	// n=10
+	@10
+	D=A
+	@n
+	M=D
+
+	// initialize i = 0
+	@i
+	M=0
+
+(LOOP)
+	// if (i==n) goto END
+	@i
+	D=M
+	@n
+	D=D-M
+	@END
+	D;JEQ
+
+	// RAM[arr+i] = -1
+	@arr
+	D=M
+	@i
+	A=D+M
+	M=-1
+
+	// i++
+	@i
+	M=M+1
+
+	@LOOP
+	0;JMP
+
+(END)
+	@END
+	0;JMP
+
+```
+
+- **Input/Output**
+
+**SCREEN**
+```
+Rectangle drawing: Pseudo code
+//	for (i=0; i<n; i++){
+//	draw 16 black pixels at the
+//	beginning of row i
+//	}
+
+addr = SCREEN
+n = RAM[0]
+i = 0
+
+LOOP:
+	if i > n goto END
+	RAM[addr] = -1	// 1111111111111111
+	// advances to the next row
+	addr = addr + 32
+	i = i + 1
+	goto LOOP
+
+END:
+	goto END
+```
+
+```
+// Program: Rectangle.asm
+// Draws a filled rectangle at the
+// screen's top left corner, with
+// width of 16 pixels and height of
+// RAM[0] pixels.
+// Usage: put a non-negative number
+	(rectangle's height) in RAM[0]
+
+	@SCREEN
+	D=A
+	@addr
+	M=D	// addr = 16384
+		// screen's base address
+	@0
+	D=M
+	@n
+	M=D	// n = RAM[0]
+
+	@i
+	M=0	// i = 0
+
+(LOOP)
+	@i
+	D=M
+	@n
+	D=D-M
+	@END
+	D;JGT // if i > n (i - n 이 0 보다 클 시) goto END
+
+	@addr
+	A=M
+	M=-1	// RAM[addr]=1111111111111111
+
+	@i
+	M=M+1	// i = i + 1
+	@32
+	D=A
+	@addr
+	M=D+M	// addr = addr + 32
+	@LOOP
+	0;JMP	// goto LOOP
+
+(END)
+	@END	// program's end
+	0;JMP	// infinite loop
+```
+
+**KEYBOARD**
+키보드의 base address에 해당하는 레지스터를 확인하면 된다..
